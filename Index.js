@@ -27,20 +27,29 @@ io.on('connection' , (socket) => {
     })
 
     socket.on('user-join', ({username, room}) => {
-        userConnected.push({
-            id: socket.id,
-            username: username, 
-            room: room
-        })
-
-        console.log(userConnected)
-
         let checkTotalUserInRoom = userConnected.filter((value) => {
             return value.room === room
         })
 
-        socket.join(room)
-        socket.emit('total-user', checkTotalUserInRoom.length)
+        if(checkTotalUserInRoom.length <= 4){ 
+            console.log('Available')
+            userConnected.push({
+                id: socket.id,
+                username: username, 
+                room: room
+            })
+            socket.join(room)
+            socket.emit('total-user', checkTotalUserInRoom.length)
+            socket.to(room).emit('message-from-server', {message: username + 'Join to The Room'})
+        }else{
+            console.log('Full')
+             socket.emit('total-user', checkTotalUserInRoom.length)
+        }
+    })
+
+    socket.on('users-online', (room) => {
+        let usersInRoom = userConnected.filter(value => value.room === room)
+        io.in(room).emit('users-online', usersInRoom)
     })
 
     socket.on('disconnect', () => {
