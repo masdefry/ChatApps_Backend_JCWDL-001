@@ -52,6 +52,20 @@ io.on('connection' , (socket) => {
         io.in(room).emit('users-online', usersInRoom)
     })
 
+    socket.on('send-message', (data) => {
+        let index = null 
+        userConnected.forEach((value, idx) => {
+            if(value.id === socket.id){
+                index = idx
+            }
+        })
+
+        let room = userConnected[index].room 
+        let username = userConnected[index].username 
+
+        io.in(room).emit('send-message-back', { from: username, message: data.message })
+    })
+
     socket.on('disconnect', () => {
         console.log('User Disconnect')
     })
