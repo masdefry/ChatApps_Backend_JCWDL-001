@@ -11,6 +11,15 @@ const httpApp = http.createServer(app)
 const io = socket(httpApp, { cors: { origin: '*' } })
 const PORT = 2000
 
+// Create Connection
+const mysql = require('mysql')
+const db = mysql.createConnection({
+    user: 'root',
+    password: '20121995',
+    database: 'livechat_system',
+    port: 3306
+})
+
 // Routes 
 app.get('/', (req, res) => {
     res.send('Welcome to API Chat')
@@ -40,7 +49,7 @@ io.on('connection' , (socket) => {
             })
             socket.join(room)
             socket.emit('total-user', checkTotalUserInRoom.length)
-            socket.to(room).emit('message-from-server', {message: username + 'Join to The Room'})
+            socket.to(room).emit('message-from-server', {message: username + 'Join to The Room', is_join: true})
         }else{
             console.log('Full')
              socket.emit('total-user', checkTotalUserInRoom.length)
@@ -49,7 +58,17 @@ io.on('connection' , (socket) => {
 
     socket.on('users-online', (room) => {
         let usersInRoom = userConnected.filter(value => value.room === room)
-        io.in(room).emit('users-online', usersInRoom)
+
+        db.query('SELECT * FROM messages WHERE room = ?', room, (err, result) => {
+            try {
+                if(err) throw err 
+
+                io.in(room).emit('users-online', usersInRoom)
+                socket.emit('send-history-message', result)
+            } catch (error) {
+                console.log(error)
+            }
+        })
     })
 
     socket.on('send-message', (data) => {
@@ -63,11 +82,53 @@ io.on('connection' , (socket) => {
         let room = userConnected[index].room 
         let username = userConnected[index].username 
 
-        io.in(room).emit('send-message-back', { from: username, message: data.message })
+        let dataToInsert = {
+            username: username,
+            room: room, 
+            socket_id: socket.id,
+            message: data.message
+        }
+
+        db.query('INSERT INTO messages SET ?', dataToInsert, (err, result) => {
+            try {
+                if(err) throw err 
+
+                io.in(room).emit('send-message-back', { from: username, message: data.message })
+            } catch (error) {
+                console.log(error)
+            }
+        })
+    })
+
+    socket.on('typing-message', (data) => {
+        let index = null 
+        userConnected.forEach((value, idx) => {
+            if(value.id === socket.id){
+                index = idx
+            }
+        })
+
+        let room = userConnected[index].room 
+        let username = userConnected[index].username 
+
+        socket.to(room).emit('typing-message-back', { from: username, message: data.message })
     })
 
     socket.on('disconnect', () => {
-        console.log('User Disconnect')
+        let index = null 
+        userConnected.forEach((value, idx) => {
+            if(value.id === socket.id){
+                index = idx
+            }
+        })
+        var room = userConnected[index].room 
+        var username = userConnected[index].username 
+
+        if(index !== null){
+            userConnected.splice(index, 1)
+        }
+
+        socket.to(room).emit('message-from-server', {message: username + 'Left from The Room', is_join: false})
     })
 })
 
